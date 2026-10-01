@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Persetujuan lokasi</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<main class="wrap">
+  <section class="card">
+    <h1>Bagikan lokasi?</h1>
+    <p>
+      Tautan ini meminta lokasi perangkatmu. Lokasi hanya akan dikirim jika
+      kamu menekan <b>Izinkan</b> pada permintaan lokasi browser.
+    </p>
+    <p class="muted small">
+      Setelah selesai, kamu akan diarahkan ke halaman tujuan.
+    </p>
+    <button id="allowBtn">Lanjut & minta izin lokasi</button>
+    <button id="skipBtn" class="secondary">Lanjut tanpa lokasi</button>
+    <p id="status" class="status"></p>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../config.js"></script>
+<script>
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const slug = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
+
+async function getLink() {
+  const { data, error } = await sb.from("tracking_links")
+    .select("id,slug,target_url")
+    .eq("slug", slug)
+    .eq("active", true)
+    .maybeSingle();
+  if (error || !data) throw new Error("Tautan tidak ditemukan.");
+  return data;
+}
+
+function getDeviceName() {
+  const ua = navigator.userAgent;
+  const android = ua.match(/Android[^;)]*;\s*(?:[a-z]{2}-[A-Z]{2};\s*)?([^;)]+?)(?:\s+Build\/[^;)]+)?[;)]/i);
+  if (android && android[1]) return "Android • " + android[1].trim();
+  if (/iPhone/i.test(ua)) return "iPhone";
+  if (/iPad/i.test(ua)) return "iPad";
+  if (/Windows/i.test(ua)) return "Windows";
+  if (/Macintosh/i.test(ua)) return "Mac";
+  if (/Linux/i.test(ua)) return "Linux";
+  return "Perangkat tidak diketahui";
+}
+
+async function saveEvent(link, positionOrNull) {
+  const payload = {
+    link_id: link.id,
+    device_name: getDeviceName(),
+    user_agent: navigator.userAgent,
+    latitude: positionOrNull?.coords.latitude ?? null,
+    longitude: positionOrNull?.coords.longitude ?? null,
+    accuracy_m: positionOrNull?.coords.accuracy ?? null
+  };
+  await sb.from("tracking_events").insert(payload);
+}
+
+async function redirect() {
+  const link = await getLink();
+  location.replace(link.target_url);
+}
+
+document.getElementById("allowBtn").onclick = async () => {
+  const status = document.getElementById("status");
+  status.textContent = "Meminta izin lokasi...";
+  try {
+    const link = await getLink();
+    if (!navigator.geolocation) {
+      await saveEvent(link, null);
+      return redirect();
+    }
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        await saveEvent(link, pos);
+        location.replace(link.target_url);
+      },
+      async () => {
+        await saveEvent(link, null);
+        location.replace(link.target_url);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  } catch (e) {
+    status.textContent = e.message;
+  }
+};
+
+document.getElementById("skipBtn").onclick = redirect;
+</script>
+</body>
+</html>
