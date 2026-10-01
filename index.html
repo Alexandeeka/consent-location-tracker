@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Consent Link Tracker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="wrap">
+  <section class="card">
+    <h1>Consent Link Tracker</h1>
+    <p class="muted">Buat tautan yang meminta izin lokasi sebelum meneruskan pengunjung ke URL tujuan.</p>
+
+    <label>URL tujuan</label>
+    <input id="targetUrl" type="url" placeholder="https://vt.tiktok.com/..." required>
+
+    <label>Nama tautan / slug</label>
+    <input id="slug" type="text" placeholder="dikarchetype" maxlength="40">
+
+    <button id="createBtn">Buat tautan</button>
+    <p id="status" class="status"></p>
+
+    <div id="result" class="result hidden">
+      <strong>Tautanmu:</strong>
+      <input id="generated" readonly>
+      <button id="copyBtn" class="secondary">Salin</button>
+    </div>
+
+    <hr>
+    <p class="muted small">
+      Data lokasi hanya dicatat jika pengunjung memilih "Izinkan" pada permintaan lokasi browser.
+    </p>
+    <a href="dashboard.html">Buka dashboard</a>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+
+function randomSlug() {
+  return crypto.randomUUID().slice(0,8);
+}
+
+$("slug").value = randomSlug();
+
+$("createBtn").onclick = async () => {
+  const target = $("targetUrl").value.trim();
+  let slug = $("slug").value.trim().replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase();
+  if (!/^https?:\/\//i.test(target)) {
+    $("status").textContent = "Masukkan URL lengkap yang diawali http:// atau https://.";
+    return;
+  }
+  if (!slug) slug = randomSlug();
+
+  $("status").textContent = "Membuat...";
+  const { data, error } = await sb.from("tracking_links")
+    .insert({ slug, target_url: target })
+    .select("slug")
+    .single();
+
+  if (error) {
+    $("status").textContent = error.message;
+    return;
+  }
+
+  const base = location.origin + location.pathname.replace(/\/[^/]*$/, "/");
+  const link = base + "t/" + encodeURIComponent(data.slug);
+  $("generated").value = link;
+  $("result").classList.remove("hidden");
+  $("status").textContent = "Berhasil.";
+};
+
+$("copyBtn").onclick = async () => {
+  await navigator.clipboard.writeText($("generated").value);
+  $("copyBtn").textContent = "Tersalin!";
+  setTimeout(() => $("copyBtn").textContent = "Salin", 1200);
+};
+</script>
+</body>
+</html>

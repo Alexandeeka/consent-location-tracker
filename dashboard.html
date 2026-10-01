@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="wrap wide">
+  <section class="card">
+    <h1>Dashboard lokasi</h1>
+    <p class="muted">Hanya data yang diberikan setelah persetujuan lokasi yang dapat berisi koordinat.</p>
+    <div id="loginBox">
+      <input id="email" type="email" placeholder="Email Supabase Auth">
+      <input id="password" type="password" placeholder="Password">
+      <button id="loginBtn">Masuk</button>
+      <p id="loginStatus" class="status"></p>
+    </div>
+    <div id="dash" class="hidden">
+      <button id="logoutBtn" class="secondary">Keluar</button>
+      <button id="refreshBtn" class="secondary">Refresh</button>
+      <div id="rows"></div>
+    </div>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = id => document.getElementById(id);
+
+$("loginBtn").onclick = async () => {
+  const { error } = await sb.auth.signInWithPassword({
+    email: $("email").value, password: $("password").value
+  });
+  $("loginStatus").textContent = error ? error.message : "Berhasil masuk.";
+  if (!error) load();
+};
+$("logoutBtn").onclick = () => sb.auth.signOut().then(load);
+$("refreshBtn").onclick = load;
+
+async function load() {
+  const { data: { session } } = await sb.auth.getSession();
+  $("loginBox").classList.toggle("hidden", !!session);
+  $("dash").classList.toggle("hidden", !session);
+  if (!session) return;
+
+  const { data, error } = await sb.from("tracking_events")
+    .select("created_at,device_name,latitude,longitude,accuracy_m,tracking_links(slug,target_url)")
+    .order("created_at", { ascending:false })
+    .limit(200);
+
+  if (error) {
+    $("rows").innerHTML = "<p class='status'>" + error.message + "</p>";
+    return;
+  }
+
+  $("rows").innerHTML = data.map(x => {
+    const coords = x.latitude != null && x.longitude != null;
+    const map = coords
+      ? `<a target="_blank" href="https://www.google.com/maps?q=${x.latitude},${x.longitude}">Buka Google Maps</a>`
+      : "Lokasi tidak dibagikan";
+    return `<article class="event">
+      <b>${escapeHtml(x.device_name || "Tidak diketahui")}</b>
+      <div class="muted small">${new Date(x.created_at).toLocaleString()}</div>
+      <div>Link: ${escapeHtml(x.tracking_links?.slug || "-")}</div>
+      <div>${map}</div>
+      ${coords ? `<div class="small">Lat: ${x.latitude}<br>Lng: ${x.longitude}<br>Akurasi: ±${Math.round(x.accuracy_m || 0)} m</div>` : ""}
+    </article>`;
+  }).join("") || "<p>Belum ada data.</p>";
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+load();
+</script>
+</body>
+</html>
