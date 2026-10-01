@@ -1,2 +1,2 @@
-const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL_HERE";
-const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_KEY_HERE";
+const SUPABASE_URL = "https://bbnjcfauxmblnlkzqduh.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_woTqXzcIhPhaQxFxDT22GA_7OPrdj3X";
